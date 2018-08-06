@@ -1,0 +1,31 @@
+{
+  "name": "article-demystifying-promises",
+  "version": "1.0.0",
+  "description": "Demystifying Promises in Javascript",
+  "main": "index.js",
+  "scripts": {
+    "test": "node node_modules/.bin/jasmine"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/th317erd/article-demystifying-promises.git"
+  },
+  "keywords": [
+    "lesson",
+    "article",
+    "learning",
+    "programming",
+    "javascript",
+    "promise",
+    "promises"
+  ],
+  "author": "Wyatt Greenway",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/th317erd/article-demystifying-promises/issues"
+  },
+  "homepage": "https://github.com/th317erd/article-demystifying-promises#readme",
+  "devDependencies": {
+    "jasmine": "^3.1.0"
+  }
+}
