@@ -212,9 +212,29 @@ someLongOperationThatReturnsAPromise -> (returns Promise A)
 
 So really, a new Promise is created for *every* call to "then", which will resolve after the previous "then" resolves, which will resolve after the previous-previous "then" resolves, etc... It is a chain of Promises, which all resolve (or reject) only after their "parent" Promise resolves or rejects.
 
-Okay, so how do we implement this? It actually isn't too hard:
+Okay, so how do we implement this? It actually isn't also isn't too hard:
 
 ```javascript
+// This is a secret private reference that we used to compare
+// against the constructor arguments.
+// On some promises (such as those created with MyPromise.resolve
+// or MyPromise.reject) we don't want the
+// 'Possible unhandled promise rejection' warning
+// so we use the NO_POSSIBLE_UNHANDLED_WARNING as a constructor
+// argument to the MyPromise to disable this warning
+const NO_POSSIBLE_UNHANDLED_WARNING = {};
+
+function onNextTick(callback) {
+  // Are we running in an environment that has a "nextTick" function?
+  if (typeof process !== 'undefined' && typeof process.nextTick === 'function') {
+    // Yes we are, so use it
+    process.nextTick(callback);
+  } else {
+    // No, we aren't, so fallback to a timeout
+    setTimeout(callback, 1);
+  }
+}
+
 // This method helps us see if any object is a promise-type object
 function isPromiseTypeObject(value) {
   // Is value a MyPromise, a Promise, or any object (duck-typing) that has a "then" and "catch" method?
@@ -245,25 +265,25 @@ class MyPromise {
     if (typeof executor !== 'function')
       throw new TypeError('First argument to MyPromise constructor must be a function');
 
-    const handleFulfillment = () => {
-      // Have we already handled resolution/rejection?
-      if (alreadyHandled)
-        return;
-      alreadyHandled = true;
+    const finalizePromise = () => {
+      // Here we see if "reject" or "resolve" have already
+      // been called. If either has already been called we
+      // do nothing and return
+      if (alreadyFinalized) return;
+      alreadyFinalized = true;
 
       // We use "nextTick" here to ensure callbacks have
       // been bound after the constructor returns
       // before a resolution can take place.
       // If we didn't, the promise might resolve before
       // we could bind any listeners
-      process.nextTick(() => {
+      onNextTick(() => {
         // Call all resolver callbacks
         var resolutionValue = privateScope.resolutionValue,
             status = privateScope.status,
             isRejected = (status === 'rejected'),
             callbacks = (isRejected) ? privateScope.rejectors : privateScope.resolvers;
 
-        // If the secret reference hasn't been provided, and NO callbacks have been bound, warn about a possible unhandled rejection
         if (doNotWarnSecretReference !== NO_POSSIBLE_UNHANDLED_WARNING && !callbacks.length && isRejected)
           console.warn('Possible unhandled promise rejection');
 
@@ -280,21 +300,24 @@ class MyPromise {
     const resolver = (resolveWithValue) => {
       privateScope.resolutionValue = resolveWithValue;
       privateScope.status = 'fulfilled';
-      handleFulfillment();
+      finalizePromise();
     };
 
     // Rejecter callback to reject this Promise
     const rejecter = (rejectWithValue) => {
       privateScope.resolutionValue = rejectWithValue;
       privateScope.status = 'rejected';
-      handleFulfillment();
+      finalizePromise();
     };
 
     // This scope variable ensures we don't
     // allow a resolution or rejection more than once
-    var alreadyHandled = false;
+    var alreadyFinalized = false;
 
     // Set up our internal (private) scope
+    // We use this so we don't expose internal
+    // variables that we might not want
+    // someone mucking with
     var privateScope = {
           // The promise's status
           status: 'pending',
@@ -302,7 +325,7 @@ class MyPromise {
           resolutionValue: undefined,
           // Our method that will handle when the promise
           // is resolved or rejected
-          handleFulfillment,
+          finalizePromise,
           // Reference to myself
           thisPromise: this,
           // Arrays to hold bound listeners
@@ -337,7 +360,7 @@ class MyPromise {
       privateScope.rejectors.push((value) => callCallback(failureCallback, value, reject, reject));
 
       if (privateScope.status !== 'pending')
-        privateScope.handleFulfillment();
+        privateScope.finalizePromise();
     }, NO_POSSIBLE_UNHANDLED_WARNING);
   }
 
@@ -366,3 +389,5 @@ MyPromise.reject = function(value) {
   }, NO_POSSIBLE_UNHANDLED_WARNING);
 };
 ```
+
+Okay, whoa, hold on... what just happened? Yes, I skipped a few steps and snuck a few other implementation details in there.
