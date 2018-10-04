@@ -2,7 +2,7 @@
 
 Asynchronous code can be confusing sometimes. Most people understand a callback: "Call me when you are done". Simple. But what about Promises? Though Promises make our lives easier in many ways, they themselves can sometimes be confusing. Let's start with the most mundane question: "What is a Promise?"
 
-The answer is actually surprisingly simple. A Promise is simply a glorified callback. Or, more acurately, it is an object that one can attach MULTIPLE callbacks _to_. That really is all there is to it.
+The answer is actually surprisingly simple. A Promise is simply a glorified callback. Or, more acurately, it is an object that one can attach **multiple** callbacks _to_. That really is all there is to it.
 
 Let's look at a few examples. First we have the "old" callback way:
 
@@ -19,7 +19,7 @@ function doSomeLongAsynchronousOperation(callMeWhenDone) {
     else
       callMeWhenDone(null, result);
 
-  // Random number of milliseconds to wait before resolution of Promise
+  // Random number of milliseconds to wait before we call our callback
   }, Math.random() * 2500);
 }
 
