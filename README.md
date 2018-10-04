@@ -37,6 +37,8 @@ With Promises the above example could instead look like:
 
 ```javascript
 function doSomeLongAsynchronousOperation() {
+  // Here we return a Promise that we can bind callback
+  // "listeners" to (kind of like binding events to an element)
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       var error = null,
@@ -66,7 +68,7 @@ doSomeLongAsynchronousOperation()
   });
 ```
 
-So really a Promise is just an abstraction layer between a direct callback ("resolve" or "reject") and other bound callbacks (provided to "then" or "catch").
+So really a Promise is just an abstraction layer between a direct callback (`resolve` and `reject`) and other "bound" listeners (callbacks) provided to `then` or `catch`.
 
 # Re-creating Promise from scratch
 
@@ -75,6 +77,8 @@ In order to "demystify" Promises we are going to write our own implementation of
 First, we will start by writing the class itself to act much like what I just related above. We will create a class that when instantiated can have callbacks "bound" to it.
 
 ```javascript
+// nextTick is a simple function that defers execution of the provided
+// callback until the next Javascript event "frame"
 function onNextTick(callback) {
   // Are we running in an environment that has a "nextTick" function?
   if (typeof process !== 'undefined' && typeof process.nextTick === 'function') {
@@ -159,7 +163,7 @@ class MyPromise {
 }
 ```
 
-Not too complex, eh'? As you can see when you boil it down, really we are just adding callbacks to an array, and "resolve" or "reject" just call those callbacks (a single callback calling more callbacks). This is great! Now let's see it in operation:
+Not too complex, eh'? As you can see when you boil it down, really we are just adding callbacks to an array, and "resolve" or "reject" just calls those callbacks (a single callback calling more callbacks). This is great! Now let's see it in operation:
 
 ```javascript
 function doSomeLongAsynchronousOperation() {
@@ -172,7 +176,7 @@ function doSomeLongAsynchronousOperation() {
         reject(error);
       else
         resolve(result);
-    }, 5000);
+    }, Math.random() * 2500);
   });
 }
 
@@ -199,7 +203,7 @@ someLongOperationThatReturnsAPromise()
   })
 ```
 
-In standard implementations the above code works properly. It waits first the first promise (returned from `someLongOperationThatReturnsAPromise`) to resolve. When it does, the first "then" callback is called with the result. The amazing thing that happens next is that this first "then" callback now *returns* another Promise, so the second "then" callback now won't be called *until the second Promise is resolved!*
+In standard implementations the above code works properly. It waits first on the first promise (returned from `someLongOperationThatReturnsAPromise`) to resolve. When it does, the first "then" callback is called with the result. The amazing thing that happens next is that this first "then" callback now *returns* another Promise, so the second "then" callback now won't be called *until the returned Promise is resolved!*
 
 This is obviously very useful, but how does it work? Well, behind the scenes, "then" *always* returns a Promise immediately. This Promise is then resolved or rejected *after* the callback returns a value. If the return value is a Promise, it will once again wait for *that* Promise to resolve or reject before it resolves or rejects *itself*. Is that confusing? Here, let me illistrate:
 
@@ -394,7 +398,7 @@ MyPromise.reject = function(value) {
 };
 ```
 
-Okay, whoa, hold on... what just happened? Yes, I skipped a few steps and snuck a few other implementation details in there. We needed the static `MyPromise.resolve` and `MyPromise.reject` in order to pull this off (and it was a standard feature anyhow). They are both simple enough. They just take any value given to them and return an immediately resolved or rejected promise with that value. We also added the helper function `isPromiseTypeObject` which simply helps us decide if any value given to it is a valid promise or not. The last helper we added is `callCallback` which just assists us with calling any callback function provided to it, and will also assist in resolving or rejecting any parent Promise. The last items were just cleanup. We added a private scope so our Promise implementation acts more like a standard implementation where we don't expose internals. So now this is working quite well, and we can chain our Promises:
+Okay, whoa, hold on... what just happened? Yes, I skipped a few steps and snuck a few other implementation details in there. We needed the static `MyPromise.resolve` and `MyPromise.reject` methods in order to pull this off (and it was a standard feature anyhow). They are both simple enough. They just take any value given to them and return an immediately resolved or rejected promise with that value. We also added the helper function `isPromiseTypeObject` which simply helps us decide if any value given to it is a valid promise or not. The last helper we added is `callCallback` which just assists us with calling any callback function provided to it, and will also assist in resolving or rejecting any parent Promise. The last items were just cleanup. We added a private scope so our Promise implementation acts more like a standard implementation where we don't expose internals. So now this is working quite well, and we can chain our Promises:
 
 ```javascript
 function doSomeLongAsynchronousOperation(resultValue) {
@@ -500,10 +504,10 @@ MyPromise.all(promises).then((results) => {
 });
 ```
 
-And there you have it! As I said earlier, this isn't an attempt at a full standard implementation, so some things are missing (i.e. `MyPromise.race`). Feel free to implement them yourself! Doing so would be a great exercise to keep those creative juices flowing.
+And there you have it! As I said earlier, this isn't an attempt at a full standard implementation, so some things are missing (i.e. `MyPromise.race`, and calling callbacks that are bound *after* the Promise has already resolved). Feel free to implement these details yourself! Doing so would be a great exercise to keep those creative juices flowing!
 
 # Recap
 
-So hopefully now you better understand how Promises work. Again, really it is all just counters and callbacks that call other callbacks. It may seem complex when you first start using them, but before long they will become as easy to understand as `new MyPromise((resolve) => (1 + 1)).then((two) => console.log('1 + 1 equals ', two));`
+So hopefully now you better understand how Promises work. Again, really it is all just counters, and callbacks that call other callbacks. It may seem complex when you first start using them, but before too long they will become as easy to understand as `new MyPromise((resolve) => (1 + 1)).then((two) => console.log('1 + 1 equals ', two));`
 
-Cheers! In my next article I will be walking you through re-creating React from the ground-up so you can better understand how React works internally.
+Cheers! In my next article I will be walking you through re-creating React from the ground-up so you can better understand how React works internally. Stay tuned!
