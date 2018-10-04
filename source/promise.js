@@ -185,8 +185,10 @@ MyPromise.all = function(_values) {
 
   // Next we setup a counter that is equal to the the number of items to resolve
   // when this counter reaches zero we know that all our promises have resolved
-  var resolutionCounter = values.length,
-      resolvedValues = new Array(resolutionCounter);
+  var resolutionCounter = values.length;
+
+  // It is nicer on memory handling if we allocate the needed Array up-front
+  var resolvedValues = new Array(resolutionCounter);
 
   return new MyPromise((resolve, reject) => {
     // iterate all provided promises / values

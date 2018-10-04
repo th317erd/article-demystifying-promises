@@ -18,7 +18,9 @@ function doSomeLongAsynchronousOperation(callMeWhenDone) {
       callMeWhenDone(error, null);
     else
       callMeWhenDone(null, result);
-  }, 5000);
+
+  // Random number of milliseconds to wait before resolution of Promise
+  }, Math.random() * 2500);
 }
 
 doSomeLongAsynchronousOperation((error, result) => {
@@ -34,7 +36,7 @@ doSomeLongAsynchronousOperation((error, result) => {
 With Promises the above example could instead look like:
 
 ```javascript
-function doSomeLongAsynchronousOperation(callMeWhenDone) {
+function doSomeLongAsynchronousOperation() {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       var error = null,
@@ -49,7 +51,9 @@ function doSomeLongAsynchronousOperation(callMeWhenDone) {
         reject(error);
       else
         resolve(result);
-    }, 5000);
+
+    // Random number of milliseconds to wait before resolution of Promise
+    }, Math.random() * 2500);
   });
 }
 
@@ -158,7 +162,7 @@ class MyPromise {
 Not too complex, eh'? As you can see when you boil it down, really we are just adding callbacks to an array, and "resolve" or "reject" just call those callbacks (a single callback calling more callbacks). This is great! Now let's see it in operation:
 
 ```javascript
-function doSomeLongAsynchronousOperation(callMeWhenDone) {
+function doSomeLongAsynchronousOperation() {
   return new MyPromise((resolve, reject) => {
     setTimeout(() => {
       var error = null,
@@ -390,4 +394,116 @@ MyPromise.reject = function(value) {
 };
 ```
 
-Okay, whoa, hold on... what just happened? Yes, I skipped a few steps and snuck a few other implementation details in there.
+Okay, whoa, hold on... what just happened? Yes, I skipped a few steps and snuck a few other implementation details in there. We needed the static `MyPromise.resolve` and `MyPromise.reject` in order to pull this off (and it was a standard feature anyhow). They are both simple enough. They just take any value given to them and return an immediately resolved or rejected promise with that value. We also added the helper function `isPromiseTypeObject` which simply helps us decide if any value given to it is a valid promise or not. The last helper we added is `callCallback` which just assists us with calling any callback function provided to it, and will also assist in resolving or rejecting any parent Promise. The last items were just cleanup. We added a private scope so our Promise implementation acts more like a standard implementation where we don't expose internals. So now this is working quite well, and we can chain our Promises:
+
+```javascript
+function doSomeLongAsynchronousOperation(resultValue) {
+  return new MyPromise((resolve, reject) => {
+    setTimeout(() => {
+      var error = null,
+          result = 'I am resolving with the value: ' + resultValue;
+
+      if (error)
+        reject(error);
+      else
+        resolve(result);
+    }, Math.random() * 2500);
+  });
+}
+
+doSomeLongAsynchronousOperation('First promise')
+  .then((result) => {
+    return doSomeLongAsynchronousOperation('Second Promise: ' + result);
+  })
+  .then((finalResult) => {
+    console.error('Final result is: ', finalResult);
+  });
+```
+
+Perfect! Feel free to play around with exceptions and rejections, which also all work. Hopefully at this point Promises are making a little more sense. There is only one last detail we are going to add (for the sake of article length I am not going to attempt to make this a *full* implementation of standard Promise). We need a `MyPromise.all` we we can wait for the resolution of multiple promises. At the bottom of our file we are going to add:
+
+```javascript
+// Static "all" method
+// this will create a new promise
+// that will only resolve
+// after all other promises
+// have resolved, or will be
+// rejected after ANY of the promises
+// have been rejected
+MyPromise.all = function(_values) {
+  // Create an array from the provided values (if it isn't already an array)
+  var values = Array.from(_values);
+
+  // Next we setup a counter that is equal to the the number of items to resolve
+  // when this counter reaches zero we know that all our promises have resolved
+  var resolutionCounter = values.length;
+
+  // It is nicer on memory handling if we allocate the needed Array up-front
+  var resolvedValues = new Array(resolutionCounter);
+
+  return new MyPromise((resolve, reject) => {
+    // iterate all provided promises / values
+    values.forEach((_value, index) => {
+      // Here we create a copy of the argument
+      // because we might modify the value
+      // and it is a bad idea to modify arguments directly
+      var value = _value;
+
+      // If this is not a promise, turn it into a resolved promise
+      // with the resolution being this "value"
+      if (!isPromiseTypeObject(value))
+        value = MyPromise.resolve(value);
+
+      // Now we listen for the promise to resolve/reject
+      // when it does we adjust our counter.
+      // When the counter reaches zero we know that all
+      // promises have resolved
+
+      value.then((resolutionValue) => {
+        // Collect the resolved value and store it in our
+        // array of resolved values
+        resolvedValues[index] = resolutionValue;
+
+        // Decrement the counter by one
+        resolutionCounter--;
+
+        // Have we finished yet?
+        if (resolutionCounter === 0) {
+          // now we know that all promises have resolved, so we can resolve ourself
+          resolve(resolvedValues);
+        }
+      }, (error) => {
+        // Uh oh... something failed...
+        // We don't need to worry about
+        // "resolutionCounter" ever reaching
+        // zero at this point (and succeeding) because
+        // this item failed, so "resolutionCounter"
+        // will never be able to reach zero (and hence
+        // never succeed)
+        reject(error);
+      });
+    });
+  });
+};
+```
+
+As you can see, waiting on multiple Promises to resolve really is just as simple as a counter, that when it reaches zero means we have full resolution. Simple enough, eh'? Now to try it out!
+
+```javascript
+var promises = [];
+promises.push(doSomeLongAsynchronousOperation('First promise'));
+promises.push(doSomeLongAsynchronousOperation('Second promise'));
+promises.push(doSomeLongAsynchronousOperation('Third promise'));
+promises.push(doSomeLongAsynchronousOperation('Forth promise'));
+MyPromise.all(promises).then((results) => {
+  console.log('Results from all Promises: ', results);
+});
+```
+
+And there you have it! As I said earlier, this isn't an attempt at a full standard implementation, so some things are missing (i.e. `MyPromise.race`). Feel free to implement them yourself! Doing so would be a great exercise to keep those creative juices flowing.
+
+# Recap
+
+So hopefully now you better understand how Promises work. Again, really it is all just counters and callbacks that call other callbacks. It may seem complex when you first start using them, but before long they will become as easy to understand as `new MyPromise((resolve) => (1 + 1)).then((two) => console.log('1 + 1 equals ', two));`
+
+Cheers! In my next article I will be walking you through re-creating React from the ground-up so you can better understand how React works internally.
